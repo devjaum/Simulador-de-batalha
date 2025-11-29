@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador RPG - Customizável</title>
+    <style>
+        :root {
+            --primary: #8e44ad;
+            --danger: #c0392b;
+            --success: #27ae60;
+            --bg: #121212;
+            --panel: #1e1e1e;
+            --text: #e0e0e0;
+            --highlight: #f39c12;
+            --active-border: 2px solid #f1c40f;
+        }
+
+        body {
+            font-family: 'Consolas', 'Monaco', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1, h2, h3 { text-align: center; color: var(--primary); margin-top: 0; }
+
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+            width: 100%;
+            max-width: 1100px;
+        }
+
+        .panel {
+            background-color: var(--panel);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            flex: 1;
+            min-width: 320px;
+            transition: all 0.3s;
+        }
+
+        /* Destaque visual para quem está no turno */
+        .active-turn {
+            border: var(--active-border);
+            box-shadow: 0 0 15px rgba(241, 196, 15, 0.2);
+            transform: scale(1.02);
+            z-index: 10;
+        }
+
+        /* Grid de Atributos na Batalha */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 2px;
+            background: #252525;
+            padding: 5px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 0.75em;
+        }
+        .stat-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: #333;
+            padding: 2px;
+            border-radius: 2px;
+        }
+        .stat-label { color: #888; margin-bottom: 2px; }
+        .stat-val { font-weight: bold; color: #fff; font-size: 1.1em; }
+
+        /* Inputs e Configuração */
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            align-items: center;
+            font-size: 0.9em;
+        }
+
+        input[type="number"], select {
+            width: 70px;
+            padding: 5px;
+            background: #2c3e50;
+            border: 1px solid #444;
+            color: white;
+            border-radius: 4px;
+        }
+        
+        select { width: 140px; }
+        input.enemy-input { background: #3e2723; border-color: #5d4037; } /* Cor diferente para inputs do inimigo */
+
+        .resource-group { margin-bottom: 15px; }
+        .bar-container {
+            margin: 4px 0;
+            background: #333;
+            height: 18px;
+            position: relative;
+            border-radius: 3px;
+        }
+        .bar-fill { height: 100%; transition: width 0.3s; }
+        .hp { background: var(--danger); }
+        .shinsu { background: var(--highlight); }
+        .mana { background: #2980b9; }
+        
+        .bar-text {
+            position: absolute;
+            width: 100%;
+            top: 10%;
+            text-align: center;
+            font-size: 11px;
+            line-height: 18px;
+            text-shadow: 1px 1px 1px #000;
+            z-index: 2;
+        }
+
+        .controls { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap;}
+        button {
+            padding: 10px 20px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            flex: 1;
+            transition: 0.2s;
+        }
+        .btn-primary { background: var(--primary); color: white; width: 100%; }
+        .btn-atk { background: var(--danger); color: white; }
+        .btn-pass { background: #7f8c8d; color: white; }
+        .btn-heal { background: #27ae60; color: white; }
+        button:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        #battle-log {
+            width: 100%;
+            max-width: 1100px;
+            height: 250px;
+            background: #000;
+            border: 1px solid #444;
+            overflow-y: auto;
+            padding: 15px;
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        .log-entry { margin-bottom: 8px; border-bottom: 1px solid #222; padding-bottom: 4px; }
+        .log-dice { color: #aaa; font-size: 0.85em; }
+        .log-hit { color: var(--success); font-weight: bold; }
+        .log-miss { color: #7f8c8d; }
+        .log-dmg { color: var(--danger); }
+        .p-turn { border-left: 3px solid var(--primary); padding-left: 8px; }
+        .e-turn { border-left: 3px solid var(--danger); padding-left: 8px; }
+
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+    <h1>Simulador RPG</h1>
+
+    <div id="setup-phase" class="container">
+        <div class="panel">
+            <h2>Criar Personagem</h2>
+            <div class="stat-row"><label>Força (Armas Pesadas):</label><input type="number" id="p-for" value="4"></div>
+            <div class="stat-row"><label>Destreza (Armas Leves/Inic):</label><input type="number" id="p-des" value="4"></div>
+            <div class="stat-row"><label>Constituição (Vida):</label><input type="number" id="p-con" value="3"></div>
+            <div class="stat-row"><label>Inteligência (Arcana):</label><input type="number" id="p-int" value="2"></div>
+            <div class="stat-row"><label>Sabedoria (Espiritual):</label><input type="number" id="p-sab" value="2"></div>
+            <div class="stat-row"><label>Carisma (Encantamento):</label><input type="number" id="p-car" value="2"></div>
+            
+            <hr style="border-color: #333;">
+            
+            <div class="stat-row">
+                <label>Estilo de Combate:</label>
+                <select id="p-weapon-type">
+                    <option value="heavy">Arma Pesada (For)</option>
+                    <option value="light">Arma Leve (Des)</option>
+                    <option value="arcane">Magia Arcana (Int)</option>
+                    <option value="spirit">Magia Espiritual (Sab)</option>
+                    <option value="word">Encantamento (Car)</option>
+                </select>
+            </div>
+            <div class="stat-row">
+                <label>Dano Base da Arma:</label>
+                <input type="number" id="p-weapon-dmg" value="4" min="1">
+            </div>
+            <div class="stat-row">
+                <label>Talento (Bônus Dados):</label>
+                <input type="number" id="p-talent" value="2" min="0">
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Configurar Inimigo</h2>
+            <div class="stat-row" style="background: #333; padding: 5px; border-radius: 4px;">
+                <label><b>Gerar Automaticamente:</b></label>
+                <select id="monster-rank" onchange="presetEnemyStats()">
+                    <option value="fraco">Fraco</option>
+                    <option value="normal" selected>Normal</option>
+                    <option value="elite">Elite</option>
+                    <option value="chefe">Chefe</option>
+                    <option value="chefe_final">Chefe Final</option>
+                </select>
+            </div>
+            <p style="font-size: 0.8em; color: #888; text-align: center;">Selecione acima para preencher, ou edite abaixo:</p>
+
+            <div class="stat-row"><label>Força:</label><input type="number" class="enemy-input" id="e-for" value="0"></div>
+            <div class="stat-row"><label>Destreza:</label><input type="number" class="enemy-input" id="e-des" value="0"></div>
+            <div class="stat-row"><label>Constituição:</label><input type="number" class="enemy-input" id="e-con" value="0"></div>
+            <div class="stat-row"><label>Inteligência:</label><input type="number" class="enemy-input" id="e-int" value="0"></div>
+            <div class="stat-row"><label>Sabedoria:</label><input type="number" class="enemy-input" id="e-sab" value="0"></div>
+            <div class="stat-row"><label>Carisma:</label><input type="number" class="enemy-input" id="e-car" value="0"></div>
+
+            <hr style="border-color: #333;">
+
+            <div class="stat-row">
+                <label>Tipo de Arma:</label>
+                <select id="e-weapon-type" class="enemy-input">
+                    <option value="heavy">Pesada (For)</option>
+                    <option value="light">Leve (Des)</option>
+                    <option value="arcane">Arcana (Int)</option>
+                    <option value="spirit">Espiritual (Sab)</option>
+                    <option value="word">Encantamento (Car)</option>
+                </select>
+            </div>
+            <div class="stat-row"><label>Dano Arma:</label><input type="number" class="enemy-input" id="e-weapon-dmg" value="4"></div>
+            <div class="stat-row"><label>Talento:</label><input type="number" class="enemy-input" id="e-talent" value="1"></div>
+            <div class="stat-row"><label>Nome:</label><input type="text" class="enemy-input" id="e-name-input" value="Monstro" style="width: 100px;"></div>
+
+            <br>
+            <button class="btn-primary" onclick="initGame()">INICIAR COMBATE</button>
+        </div>
+    </div>
+
+    <div id="battle-phase" class="container hidden">
+        <div id="panel-player" class="panel">
+            <h3 id="p-name">Herói</h3>
+            
+            <div id="p-stats-grid" class="stats-grid"></div>
+
+            <div class="resource-group">
+                <div class="bar-container"><div id="p-hp-bar" class="bar-fill hp" style="width: 100%;"></div><div id="p-hp-txt" class="bar-text"></div></div>
+                <div class="bar-container"><div id="p-shin-bar" class="bar-fill shinsu" style="width: 100%;"></div><div id="p-shin-txt" class="bar-text"></div></div>
+                <div class="bar-container"><div id="p-mana-bar" class="bar-fill mana" style="width: 100%;"></div><div id="p-mana-txt" class="bar-text"></div></div>
+            </div>
+            <div id="p-combat-info" style="font-size: 0.8em; color: #aaa; text-align: center;"></div>
+            
+            <div class="controls">
+                <button id="btn-atk" class="btn-atk" onclick="playerAttack()">ATACAR</button>
+                <button id="btn-pass" class="btn-pass" onclick="playerPass()">PASSAR VEZ</button>
+                <button id="btn-heal" class="btn-heal" onclick="playerHeal()">CURAR</button>
+            </div>
+        </div>
+
+        <div id="panel-enemy" class="panel">
+            <h3 id="e-name">Inimigo</h3>
+
+            <div id="e-stats-grid" class="stats-grid"></div>
+
+            <div class="resource-group">
+                <div class="bar-container"><div id="e-hp-bar" class="bar-fill hp" style="width: 100%;"></div><div id="e-hp-txt" class="bar-text"></div></div>
+                <div class="bar-container"><div id="e-shin-bar" class="bar-fill shinsu" style="width: 100%;"></div><div id="e-shin-txt" class="bar-text"></div></div>
+                <div class="bar-container"><div id="e-mana-bar" class="bar-fill mana" style="width: 100%;"></div><div id="e-mana-txt" class="bar-text"></div></div>
+            </div>
+            <div id="e-combat-info" style="font-size: 0.8em; color: #aaa; text-align: center;"></div>
+        </div>
+    </div>
+
+    <div id="battle-log" class="hidden"></div>
+    <div style="width: 100%; text-align: center;">
+        <button id="btn-reset" class="hidden btn-primary" onclick="location.reload()" style="max-width: 200px; margin-top: 10px;">NOVA BATALHA</button>
+    </div>
+
+    <script>
+        const SUCCESS_THRESHOLD = 4;
+
+        class Entity {
+            constructor(name, stats, weaponType, weaponDmg, talent) {
+                this.name = name;
+                this.stats = stats;
+                this.weaponType = weaponType;
+                this.weaponDmg = weaponDmg;
+                this.talent = talent;
+
+                // Fórmulas Fixas
+                this.maxHp = 5 + (stats.con * 10) + (stats.for * 5);
+                this.maxShinsu = 4 + (stats.int * 12) + (stats.sab * 6);
+                this.maxMana = 1 + (stats.des * 3) + (stats.car * 2);
+
+                this.currentHp = this.maxHp;
+                this.currentMana = this.maxMana;
+                this.currentShinsu = this.maxShinsu;
+
+                this.round = 0;
+            }
+
+            get defense() { return 1 + Math.floor(this.stats.des / 2); }
+
+            get combatAttribute() {
+                switch(this.weaponType) {
+                    case 'heavy': return this.stats.for;
+                    case 'light': return this.stats.des;
+                    case 'arcane': return this.stats.int;
+                    case 'spirit': return this.stats.sab;
+                    case 'word': return this.stats.car;
+                    default: return this.stats.for;
+                }
+            }
+        }
+
+        let player, enemy;
+        let isPlayerTurn = false;
+
+        function r(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+        function rollD6() { return r(1, 6); }
+        
+        // --- FUNÇÃO PARA PREENCHER STATUS AUTOMÁTICO (PRESETS) ---
+        function presetEnemyStats() {
+            const rank = document.getElementById('monster-rank').value;
+            const ranks = {
+                fraco:       { talent: 0, wDmg: 2, name: "Slime",        min:0, max:2 },
+                normal:      { talent: 1, wDmg: 4, name: "Goblin",       min:1, max:3 },
+                elite:       { talent: 3, wDmg: 6, name: "Cavaleiro Orc",min:2, max:4 },
+                chefe:       { talent: 5, wDmg: 8, name: "Rei Lich",     min:3, max:5 },
+                chefe_final: { talent: 8, wDmg:12, name: "Deus Caído",   min:4, max:6 },
+            };
+
+            const rnk = ranks[rank];
+            
+            // Preencher Inputs
+            document.getElementById('e-for').value = r(rnk.min, rnk.max);
+            document.getElementById('e-des').value = r(rnk.min, rnk.max);
+            document.getElementById('e-con').value = r(rnk.min, rnk.max);
+            document.getElementById('e-int').value = r(rnk.min, rnk.max);
+            document.getElementById('e-sab').value = r(rnk.min, rnk.max);
+            document.getElementById('e-car').value = r(rnk.min, rnk.max);
+
+            document.getElementById('e-weapon-dmg').value = rnk.wDmg;
+            document.getElementById('e-talent').value = rnk.talent;
+            document.getElementById('e-name-input').value = rnk.name;
+
+            const types = ['heavy','light','arcane','spirit','word'];
+            document.getElementById('e-weapon-type').value = types[Math.floor(Math.random() * types.length)];
+        }
+
+        // --- INICIALIZADOR ---
+        function initGame() {
+            // Player
+            const pStats = {
+                for: parseInt(document.getElementById('p-for').value),
+                des: parseInt(document.getElementById('p-des').value),
+                con: parseInt(document.getElementById('p-con').value),
+                int: parseInt(document.getElementById('p-int').value),
+                sab: parseInt(document.getElementById('p-sab').value),
+                car: parseInt(document.getElementById('p-car').value)
+            };
+            player = new Entity("Você", pStats, 
+                document.getElementById('p-weapon-type').value,
+                parseInt(document.getElementById('p-weapon-dmg').value),
+                parseInt(document.getElementById('p-talent').value)
+            );
+
+            // Enemy (Lê diretamente dos inputs agora)
+            const eStats = {
+                for: parseInt(document.getElementById('e-for').value),
+                des: parseInt(document.getElementById('e-des').value),
+                con: parseInt(document.getElementById('e-con').value),
+                int: parseInt(document.getElementById('e-int').value),
+                sab: parseInt(document.getElementById('e-sab').value),
+                car: parseInt(document.getElementById('e-car').value)
+            };
+            
+            enemy = new Entity(
+                document.getElementById('e-name-input').value,
+                eStats,
+                document.getElementById('e-weapon-type').value,
+                parseInt(document.getElementById('e-weapon-dmg').value),
+                parseInt(document.getElementById('e-talent').value)
+            );
+            
+            document.getElementById('e-name').innerText = enemy.name;
+
+            // UI Changes
+            renderStatsGrid(player, 'p-stats-grid');
+            renderStatsGrid(enemy, 'e-stats-grid');
+
+            document.getElementById('setup-phase').classList.add('hidden');
+            document.getElementById('battle-phase').classList.remove('hidden');
+            document.getElementById('battle-log').classList.remove('hidden');
+
+            // --- INICIATIVA ---
+            const pInit = player.stats.des + rollD6();
+            const eInit = enemy.stats.des + rollD6();
+
+            log(`<b>Teste de Iniciativa:</b><br>Você (${pInit}) vs ${enemy.name} (${eInit})`, 'system');
+
+            if (pInit >= eInit) {
+                isPlayerTurn = true;
+                log(`>> Você foi mais rápido e começa!`, 'player');
+            } else {
+                isPlayerTurn = false;
+                log(`>> ${enemy.name} foi mais rápido e começa!`, 'enemy');
+            }
+
+            processTurn();
+        }
+
+        // --- SISTEMA DE LOGS E UI ---
+        function log(html, type='neutral') {
+            const logBox = document.getElementById('battle-log');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            if(type === 'player') entry.classList.add('p-turn');
+            if(type === 'enemy') entry.classList.add('e-turn');
+            entry.innerHTML = html;
+            logBox.prepend(entry);
+        }
+
+        function renderStatsGrid(entity, elementId) {
+            const s = entity.stats;
+            const html = `
+                <div class="stat-box"><span class="stat-label">FOR</span><span class="stat-val">${s.for}</span></div>
+                <div class="stat-box"><span class="stat-label">DES</span><span class="stat-val">${s.des}</span></div>
+                <div class="stat-box"><span class="stat-label">CON</span><span class="stat-val">${s.con}</span></div>
+                <div class="stat-box"><span class="stat-label">INT</span><span class="stat-val">${s.int}</span></div>
+                <div class="stat-box"><span class="stat-label">SAB</span><span class="stat-val">${s.sab}</span></div>
+                <div class="stat-box"><span class="stat-label">CAR</span><span class="stat-val">${s.car}</span></div>
+            `;
+            document.getElementById(elementId).innerHTML = html;
+        }
+
+        function updateUI() {
+            setBar('p-hp', player.currentHp, player.maxHp);
+            setBar('p-shin', player.maxShinsu, player.maxShinsu);
+            setBar('p-mana', player.maxMana, player.maxMana);
+            document.getElementById('p-combat-info').innerText = 
+                `Defesa (DT): ${player.defense} | Atq (Dados): ${player.combatAttribute + player.talent}`;
+
+            setBar('e-hp', enemy.currentHp, enemy.maxHp);
+            setBar('e-shin', enemy.maxShinsu, enemy.maxShinsu);
+            setBar('e-mana', enemy.maxMana, enemy.maxMana);
+            document.getElementById('e-combat-info').innerText = 
+                `Defesa (DT): ${enemy.defense} | Atq (Dados): ${enemy.combatAttribute + enemy.talent}`;
+            
+            const pPanel = document.getElementById('panel-player');
+            const ePanel = document.getElementById('panel-enemy');
+            
+            if (isPlayerTurn) {
+                pPanel.classList.add('active-turn');
+                ePanel.classList.remove('active-turn');
+            } else {
+                pPanel.classList.remove('active-turn');
+                ePanel.classList.add('active-turn');
+            }
+        }
+
+        function setBar(idPrefix, current, max) {
+            const pct = Math.max(0, (current / max) * 100);
+            document.getElementById(`${idPrefix}-bar`).style.width = pct + '%';
+            document.getElementById(`${idPrefix}-txt`).innerText = `${Math.max(0, current)} / ${max}`;
+        }
+
+        // --- LÓGICA DE COMBATE ---
+        function processTurn() {
+            updateUI();
+            if (checkWin()) return;
+
+            if (isPlayerTurn) {
+                toggleControls(true);
+            } else {
+                toggleControls(false);
+                setTimeout(enemyAI, 1000);
+            }
+        }
+
+        function switchTurn() {
+            isPlayerTurn = !isPlayerTurn;
+            processTurn();
+        }
+
+        function enemyAI() {
+            if(enemy.currentHp <= 0) return;
+            resolveAttack(enemy, player);
+            if(player.currentHp > 0) {
+                setTimeout(switchTurn, 1000);
+            }
+        }
+
+        function playerAttack() {
+            toggleControls(false);
+            if(isPlayerTurn) roundOver();
+            resolveAttack(player, enemy);
+            if(enemy.currentHp > 0) {
+                setTimeout(switchTurn, 1000);
+            }
+        }
+
+        function playerHeal(){
+            toggleControls(false);
+            if(player.currentMana - 4 < 0){
+                log(`Você não tem mana suficiente para curar!`, 'player');
+                setTimeout(() => toggleControls(true), 500); // Devolve o controle
+                return;
+            }
+            player.currentMana -= 4;
+            const healAmount = 10 + Math.floor(player.stats.sab * 3);
+            player.currentHp = Math.min(player.maxHp, player.currentHp + healAmount);
+            log(`Você usou magia de cura e recuperou <b>${healAmount}</b> de vida!`, 'player');
+            if(isPlayerTurn) roundOver();
+            updateUI();
+            setTimeout(switchTurn, 800);
+        }
+
+        function playerPass() {
+            toggleControls(false);
+            log(`Você decidiu não agir...`);
+            if(isPlayerTurn) roundOver();
+            setTimeout(switchTurn, 800);
+        }
+
+        function resolveAttack(attacker, defender) {
+            const attr = attacker.combatAttribute;
+            const dicePool = attr + attacker.talent;
+            const targetNum = defender.defense;
+            
+            let results = [];
+            let successes = 0;
+            
+            for(let i=0; i<dicePool; i++) {
+                let val = rollD6();
+                results.push(val);
+                if (val >= SUCCESS_THRESHOLD) successes++;
+            }
+
+            let msg = `<b>${attacker.name}</b> ataca!<br>`;
+            msg += `<span class="log-dice">Dados [${dicePool}d6]: ${results.join(', ')}</span><br>`;
+            msg += `Sucessos: <b>${successes}</b> (DT: ${targetNum})`;
+
+            if (successes >= targetNum) {
+                let excess = successes - targetNum;
+                let bonusDmg = excess * 2;
+                let totalDmg = attacker.weaponDmg + bonusDmg;
+                
+                defender.currentHp -= totalDmg;
+                
+                msg += `<br><span class="log-hit">ACERTOU!</span> Bônus: +${bonusDmg}`;
+                msg += `<br><span class="log-dmg">Dano Total: ${totalDmg}</span>`;
+            } else {
+                msg += `<br><span class="log-miss">ERROU!</span> (Defesa bloqueou)`;
+            }
+
+            log(msg, attacker === player ? 'player' : 'enemy');
+            updateUI();
+            checkWin();
+        }
+
+        function checkWin() {
+            if (player.currentHp <= 0) {
+                log(`<b>VOCÊ MORREU!</b>`, 'enemy');
+                log(`<b>BATALHA FINALIZADA EM ${player.round} ROUNDS!</b>`, 'system');
+                endGame();
+                return true;
+            }
+            if (enemy.currentHp <= 0) {
+                log(`<b>INIMIGO DERROTADO!</b>`, 'player');
+                log(`<b>BATALHA FINALIZADA EM ${player.round} ROUNDS!</b>`, 'system');
+                endGame();
+                return true;
+            }
+            return false;
+        }
+
+        function endGame() {
+            toggleControls(false);
+            document.getElementById('btn-reset').classList.remove('hidden');
+        }
+
+        function toggleControls(enable) {
+            document.getElementById('btn-atk').disabled = !enable;
+            document.getElementById('btn-pass').disabled = !enable;
+            document.getElementById('btn-heal').disabled = !enable;
+        }
+
+        function roundOver() {
+            player.round++;
+        }
+
+        // Rodar ao iniciar para preencher os inputs padrão
+        window.onload = function() {
+            presetEnemyStats();
+        };
+
+    </script>
+</body>
+</html>
